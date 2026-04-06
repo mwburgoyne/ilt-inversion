@@ -34,7 +34,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ilt-inversion"
-version = "0.1.2"
+version = "0.1.3"
 description = "Fast numerical inverse Laplace transforms: GWR + Fixed Talbot"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
