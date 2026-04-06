@@ -27,19 +27,25 @@ def main():
     pyproject_backup = ROOT / "pyproject.toml.bak"
     pyproject.rename(pyproject_backup)
 
-    pyproject.write_text("""\
+    # Read version and metadata from the real pyproject.toml so we don't
+    # have to maintain them in two places.
+    import tomllib
+    with open(pyproject_backup, "rb") as f:
+        real_meta = tomllib.load(f)["project"]
+
+    pyproject.write_text(f"""\
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ilt-inversion"
-version = "0.1.4"
-description = "Fast numerical inverse Laplace transforms: GWR + Fixed Talbot"
+version = "{real_meta['version']}"
+description = "{real_meta['description']}"
 readme = "README.md"
-license = {text = "GPL-3.0-or-later"}
-requires-python = ">=3.10"
-authors = [{name = "Mark Burgoyne", email = "mark.burgoyne@gmail.com"}]
+license = {{text = "GPL-3.0-or-later"}}
+requires-python = "{real_meta['requires-python']}"
+authors = [{{name = "Mark Burgoyne", email = "mark.burgoyne@gmail.com"}}]
 dependencies = ["mpmath>=1.3", "numpy>=1.21"]
 
 [project.optional-dependencies]
