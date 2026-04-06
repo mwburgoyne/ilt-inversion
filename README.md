@@ -96,7 +96,7 @@ results = gwr(F, times, workers=4)
 
 **`gwr(fn, time, M=32, precin=None, backend='auto', workers=1, as_float=True)`**
 
-Inverse Laplace transform via Gaver-Wynn-Rho. `fn` is your Laplace-domain function `F(s)` or `F(s, prec)`. `time` accepts a scalar, list, or numpy array (must be > 0). `M` controls accuracy - 6-12 for smooth transforms, 32 for general use, 768+ for hard oscillatory cases. `precin` overrides the automatic precision (`round(2.1 * M)` decimal digits). `backend` can be `'auto'`, `'rust'`, `'gmpy2'`, or `'mpmath'`. Set `as_float=False` to get mpmath.mpf values at full precision.
+Inverse Laplace transform via Gaver-Wynn-Rho. `fn` is your Laplace-domain function `F(s)` or `F(s, prec)`. `time` accepts a scalar, list, or numpy array (must be > 0). `M` controls accuracy - 6-12 for smooth transforms, 32 for general use, 768+ for hard oscillatory cases. `precin` overrides the automatic precision (`round(2.1 * M)` decimal digits). `backend` can be `'auto'`, `'rust'`, `'gmpy2'`, or `'mpmath'`. `workers` sets the number of parallel processes for array inputs (default 1 = sequential) - each time point is inverted independently, so this parallelises well, but `fn` must be picklable (a module-level function, not a lambda or closure). Set `as_float=False` to get mpmath.mpf values at full precision.
 
 **`talbot(fn, time, degree=32, as_float=True)`**
 
