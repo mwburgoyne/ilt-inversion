@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "ilt-inversion"
+version = "0.1.0"
+description = "Fast numerical inverse Laplace transforms: GWR (arbitrary precision) + Fixed Talbot, with optional Rust/MPFR acceleration"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Mark Burgoyne", email = "mark.burgoyne@gmail.com"},
+]
+keywords = ["laplace", "inverse-laplace", "gwr", "gaver-wynn-rho", "numerical-inversion", "pressure-transient", "reservoir-engineering"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "mpmath>=1.3",
+    "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+fast = ["gmpy2>=2.1"]
+flint = ["python-flint>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/mwburgoyne/ilt-inversion"
+Repository = "https://github.com/mwburgoyne/ilt-inversion"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "ilt._native"

@@ -1,0 +1,14 @@
+/home/mark/projects/ilt-inversion/target/release/deps/pyo3_build_config-f65a826ddbf36c59.d: /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/lib.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/errors.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/impl_.rs /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config-file.txt /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config.txt
+
+/home/mark/projects/ilt-inversion/target/release/deps/libpyo3_build_config-f65a826ddbf36c59.rlib: /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/lib.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/errors.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/impl_.rs /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config-file.txt /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config.txt
+
+/home/mark/projects/ilt-inversion/target/release/deps/libpyo3_build_config-f65a826ddbf36c59.rmeta: /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/lib.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/errors.rs /home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/impl_.rs /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config-file.txt /home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config.txt
+
+/home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/lib.rs:
+/home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/errors.rs:
+/home/mark/.cache/puccinialin/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pyo3-build-config-0.23.5/src/impl_.rs:
+/home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config-file.txt:
+/home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out/pyo3-build-config.txt:
+
+# env-dep:CARGO_PKG_VERSION=0.23.5
+# env-dep:OUT_DIR=/home/mark/projects/ilt-inversion/target/release/build/pyo3-build-config-7e90a94e1c1a7cf8/out

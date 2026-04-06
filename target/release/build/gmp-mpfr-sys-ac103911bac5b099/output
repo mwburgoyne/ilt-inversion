@@ -1,0 +1,19 @@
+cargo:rerun-if-env-changed=GMP_MPFR_SYS_CACHE
+$ mkdir -p "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/lib"
+$ mkdir -p "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/include"
+$ cp "/home/mark/.cache/gmp-mpfr-sys/1.7/x86_64-unknown-linux-gnu/1.7.0/libmpfr.a" "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/lib/libmpfr.a"
+$ cp "/home/mark/.cache/gmp-mpfr-sys/1.7/x86_64-unknown-linux-gnu/1.7.0/mpfr.h" "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/include/mpfr.h"
+$ cp "/home/mark/.cache/gmp-mpfr-sys/1.7/x86_64-unknown-linux-gnu/1.7.0/libgmp.a" "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/lib/libgmp.a"
+cargo:limb_bits=64
+cargo:rustc-check-cfg=cfg(nails)
+cargo:rustc-check-cfg=cfg(long_long_limb)
+$ cp "/home/mark/.cache/gmp-mpfr-sys/1.7/x86_64-unknown-linux-gnu/1.7.0/gmp.h" "/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/include/gmp.h"
+cargo:limb_bits=64
+cargo:rustc-check-cfg=cfg(nails)
+cargo:rustc-check-cfg=cfg(long_long_limb)
+cargo:out_dir=/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out
+cargo:lib_dir=/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/lib
+cargo:include_dir=/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/include
+cargo:rustc-link-search=native=/home/mark/projects/ilt-inversion/target/release/build/gmp-mpfr-sys-ac103911bac5b099/out/lib
+cargo:rustc-link-lib=static=mpfr
+cargo:rustc-link-lib=static=gmp
