@@ -1,48 +1,44 @@
 # ilt-inversion
 
-Numerical inverse Laplace transforms for Python, done properly.
+Numerical inverse Laplace transforms for Python.
 
 ## Why?
 
 If you've ever needed to numerically invert a Laplace transform in Python, you've probably discovered that the standard tools either don't exist or fall over quietly when things get difficult.
 
-**NumPy and SciPy don't have one.** There's no `numpy.inverse_laplace` or `scipy.special.ilt`. The standard scientific Python stack just doesn't cover this, which is a bit surprising given how often Laplace-domain solutions appear in engineering and physics.
+**NumPy and SciPy don't have one.** There's no `numpy.inverse_laplace` or `scipy.special.ilt`. The standard scientific Python stack just doesn't cover this.
 
-**SymPy tries, but it's symbolic.** `inverse_laplace_transform` attempts to find a closed-form `f(t)` via pattern matching and table lookups. That works for textbook problems - rational functions, simple exponentials - but hand it a Bessel-function ratio or anything defined by a numerical subroutine and it silently returns an unevaluated integral. You also can't pass it a Python function that calls a numerical solver. It's a computer algebra system, not a numerical tool, and it carries ~1-2 seconds of import overhead besides.
+**SymPy tries, but it's symbolic.** `inverse_laplace_transform` attempts to find a closed-form `f(t)` via pattern matching and table lookups. That works for textbook problems - rational functions, simple exponentials - but hand it a Bessel-function ratio or anything defined by a numerical subroutine and it silently returns an unevaluated integral. You can't pass it a Python function that calls a numerical solver.
 
-**mpmath has `invertlaplace`**, and it's actually decent. Three methods: de Hoog, Fixed Talbot, and Stehfest. This library wraps the Talbot method as a convenience. But mpmath doesn't implement GWR (the most accurate method for difficult transforms), and its de Hoog and Talbot methods evaluate `F(s)` at *complex* values of `s`. That's a problem when your `F(s)` only works on the real axis - which is common in reservoir engineering where you're dealing with real-valued Bessel function ratios or feeding in results from a numerical ODE solver. GWR only needs `F(s)` at real, positive points.
+**mpmath has `invertlaplace`**, and it's actually decent. Three methods: de Hoog, Fixed Talbot, and Stehfest. But mpmath doesn't implement GWR, and its de Hoog and Talbot methods evaluate `F(s)` at *complex* values of `s`. That's a problem when your `F(s)` only works on the real axis - common in reservoir engineering where you're dealing with real-valued Bessel function ratios or feeding in results from a numerical ODE solver. GWR only needs `F(s)` at real, positive points.
 
-**Stehfest** is the one everyone implements first, because it's simple and works at f64 precision. It handles smooth, monotonic transforms fine, but give it anything oscillatory or steep and it falls apart. The fixed-precision coefficients hit catastrophic cancellation at higher orders, capping you at ~6-8 significant figures no matter how many terms you throw at it.
+**Stehfest** is the one everyone implements first, because it's simple and works at f64 precision. Handles smooth, monotonic transforms fine, but give it anything oscillatory or steep and it falls apart. The fixed-precision coefficients hit catastrophic cancellation at higher orders, capping you at ~6-8 significant figures no matter how many terms you throw at it.
 
-**David Fulford's [`gwr_inversion`](https://github.com/petbox-dev/gwr)** is the package that got this right in Python. It implements the Gaver-Wynn-Rho algorithm with arbitrary precision via mpmath and optional gmpy2 acceleration - a clean, correct implementation that made GWR accessible to the Python community. This library owes a debt to that work. The limitation is that `gwr_inversion` is pure Python throughout, and when you're inverting thousands of transforms (pressure transient analysis, aquifer modelling), the per-call overhead of Python arbitrary-precision arithmetic becomes the bottleneck.
+**David Fulford's [`gwr_inversion`](https://github.com/petbox-dev/gwr)** is the package that got this right in Python. It implements GWR with arbitrary precision via mpmath and optional gmpy2 acceleration (~10x speedup) - a clean, correct implementation that made GWR accessible to the Python community. For most general-purpose ILT work, `gwr_inversion` is all you need and this library owes a debt to it.
 
-## What this library does
+## Where this library adds value
 
-`ilt-inversion` builds on the same GWR foundation, adding Rust/MPFR acceleration (~15-70x speedup), MPFR-precision Bessel functions with numerical safeguards that most implementations skip, and automatic backend selection so you don't need to think about which precision tier is active.
+For straightforward `gwr(my_function, times)` calls, this library's Python path is essentially the same algorithm as Fulford's, with the same gmpy2 acceleration option. If that's your use case, either package will serve you well.
+
+The differences show up in two specific areas:
+
+**Bulk inversion with simple callables.** When `M` is small enough that f64 precision suffices (M <= 7, covering ~15 significant figures), the Rust/MPFR backend bypasses Python entirely and runs the full GWR algorithm in compiled code. That's a ~15x speedup per call, which adds up if you're inverting across large parameter sweeps or Monte Carlo runs. For higher M, the Rust path can't help with a general Python callable (the f64 boundary at the Python-Rust interface becomes the bottleneck), and the Python path with gmpy2 is the right choice - same as Fulford's package.
+
+**Bessel-function Laplace domains at full MPFR precision.** For Laplace-domain functions built from modified Bessel functions (pressure transient analysis, radial diffusion, heat conduction), the library includes MPFR-precision implementations of I_0, I_1, K_0, K_1 with numerical safeguards that matter when you're evaluating these functions across a wide range of arguments:
+
+- Dynamic guard bits on the K_0 power series to compensate for catastrophic cancellation between the `-(ln(x/2) + gamma) * I_0(x)` term and the harmonic series. At `x = 20`, that's ~18 digits of cancellation that silently corrupts the result if you compute at working precision.
+- Exponentially-scaled forms (`I_ne(x) = I_n(x) * exp(-x)`, `K_ne(x) = K_n(x) * exp(x)`) that stay O(1) for all `x`, avoiding the overflow/underflow that hits f64 past `x > 700`.
+- Optimal truncation of asymptotic expansions for large arguments, switching from the power series at `x = 25`.
+
+When the Laplace-domain function is implemented entirely in Rust using these Bessel functions (as it is for the Van Everdingen-Hurst radial flow solution in [pyResToolbox](https://github.com/mwburgoyne/pyResToolbox)), the full pipeline - Bessel evaluation, GWR coefficients, Wynn-rho acceleration - runs in compiled MPFR precision without crossing the Python boundary. That's where the ~70x number comes from.
 
 ## How GWR works
 
 GWR (Valko & Abate, 2004) is a three-stage process. Evaluate `F(s)` at `2M` points along the real axis and combine with pre-computed factorial/binomial coefficients (the Gaver functionals). Apply Wynn-rho sequence acceleration to improve convergence. Extract the best estimate from odd levels of the acceleration tableau.
 
-The catch is that the factorial coefficients grow as `(2M)!` and the alternating sums produce catastrophic cancellation. With `M=32`, the coefficients reach ~10^67 while the result is O(1) - so you need at least 67 decimal digits of working precision, or the answer is pure noise. Standard f64 gives you 15.9 digits. Even quad precision only gets you 33. Neither is close to enough.
+The factorial coefficients grow as `(2M)!` and the alternating sums produce catastrophic cancellation. With `M=32`, the coefficients reach ~10^67 while the result is O(1) - so you need at least 67 decimal digits of working precision, or the answer is pure noise. Standard f64 gives you 15.9 digits. Even quad precision only gets you 33.
 
 The library automatically computes `ceil(2.1 * M)` decimal digits of working precision to guarantee enough significant figures survive.
-
-## Where other implementations lose precision
-
-There are five places this can go wrong, and most implementations only handle the first one (if that).
-
-**GWR coefficient cancellation.** The Gaver functional for order `n` computes `G_n = tau * c_n * sum (-1)^i * C(n,i) * F(s_{n+i})`, where `c_n = (2n)! / (n * ((n-1)!)^2)`. For `n=32`, `c_n` is ~10^66. The alternating sum cancels most of those digits. If your arithmetic doesn't carry enough precision, the result is rounding error. This library pre-computes all coefficients at the required MPFR precision (GMP/MPFR via the `rug` crate in Rust, or mpmath/gmpy2 in Python) and runs the full algorithm in that extended precision.
-
-**Wynn-rho breakdown.** The acceleration step computes successive differences `G_0[n+1] - G_0[n]`. As adjacent functionals converge, the difference approaches zero and dividing by it amplifies noise. The library detects zero-differences and breaks out early, returning the best estimate obtained before breakdown rather than propagating NaN or Inf.
-
-**K_0 Bessel series cancellation.** For Laplace-domain functions involving modified Bessel functions (radial diffusion, heat conduction, pressure transient analysis), the power series for `K_0(x)` is `-(ln(x/2) + gamma) * I_0(x) + sum H_k * (x^2/4)^k / (k!)^2`. For large `x`, both the first term and the series sum grow as `e^x` but nearly cancel. At `x = 20`, that's ~18 digits of cancellation - the two terms agree to 18 digits and the answer lives in whatever is left.
-
-Most implementations just compute `K_0` at working precision and get garbage for moderate-to-large arguments. This library adds dynamic guard bits proportional to the argument: `guard_bits = ceil(x * log2(e)) + 20`. That exactly compensates for the `e^x` cancellation factor. The series runs at `prec + guard_bits`, then rounds back to the requested precision after the cancellation has happened.
-
-**Bessel overflow.** `I_0(x)` grows as `e^x / sqrt(2*pi*x)` and `K_0(x)` decays as `e^{-x} * sqrt(pi/(2x))`. Past `x > 700` these overflow or underflow f64. The library uses exponentially-scaled Bessel functions throughout - `I_ne(x) = I_n(x) * exp(-x)` and `K_ne(x) = K_n(x) * exp(x)` - which stay O(1) for all `x`. The exponential factors cancel algebraically in the ratios that appear in physical Laplace-domain solutions (Van Everdingen-Hurst, for instance), so the scaled forms avoid overflow entirely.
-
-**Series/asymptotic transition.** For large arguments (`x > 25`), the power series converges too slowly and suffers the cancellation described above. The library switches to asymptotic expansions with optimal truncation - summing terms until they start growing (the point of minimum error in a divergent asymptotic series) rather than using a fixed number of terms.
 
 ## Performance tiers
 
@@ -50,15 +46,11 @@ The library picks the fastest backend that will give correct results:
 
 | Tier | Backend | Speedup | When used |
 |------|---------|---------|-----------|
-| 1 | Rust/MPFR | ~15-70x | M <= 7 (f64 callable sufficient), or internal Bessel evaluation |
-| 2 | gmpy2 | ~10x | M > 7, GMP-backed factorial/binomial arithmetic |
-| 3 | mpmath | baseline | Always available, pure Python arbitrary precision |
+| 1 | Rust/MPFR | ~15-70x | M <= 7 (general callables) or internal Bessel evaluation (any M) |
+| 2 | gmpy2 | ~10x | M > 7 with general Python callables |
+| 3 | mpmath | baseline | Always available |
 
-The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already provides - we inherited that design. What's new is the Rust/MPFR tier on top.
-
-The Rust tier has an M limit because of a practical constraint. The Rust GWR engine runs in full MPFR precision internally, but it calls your Python function `F(s)` across the Rust-Python boundary and gets back a 64-bit float (~15.9 digits). For `M > 7`, GWR needs more than 15 digits in the `F(s)` values, so the f64 bottleneck at the boundary corrupts the result. The library detects this and routes high-M calls through the Python path where mpmath carries full precision end-to-end.
-
-For domain-specific applications where the Laplace-domain function is implemented entirely in Rust (Bessel-based radial flow solutions, for example), the full 70x speedup applies at any M.
+The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already provides - we inherited that design. The Rust/MPFR tier is what's new.
 
 ## Installation
 
@@ -112,7 +104,7 @@ Inverse Laplace transform via Fixed Talbot. Good for well-behaved, non-oscillato
 
 **`besselk(n, x)` / `besseli(n, x)`**
 
-Modified Bessel functions K_n(x) and I_n(x) with automatic python-flint/ARB acceleration when available. Useful for building Laplace-domain functions in pressure transient analysis and heat conduction problems.
+Modified Bessel functions K_n(x) and I_n(x) with automatic python-flint/ARB acceleration when available.
 
 ## Acknowledgements
 
