@@ -25,12 +25,17 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Rust toolchain
+      - name: Install Rust toolchain (non-Windows)
+        if: matrix.os != 'windows-latest'
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: >-
-            ${{ matrix.os == 'macos-14' && 'aarch64-apple-darwin,x86_64-apple-darwin' ||
-                matrix.os == 'windows-latest' && 'x86_64-pc-windows-gnu' || '' }}
+          targets: ${{ matrix.os == 'macos-14' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Rust toolchain (Windows GNU)
+        if: matrix.os == 'windows-latest'
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu
+          rustup default stable-x86_64-pc-windows-gnu
 
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v2.21
@@ -58,7 +63,6 @@ jobs:
             diffutils
             make
           CIBW_ENVIRONMENT_WINDOWS: >
-            CARGO_BUILD_TARGET="x86_64-pc-windows-gnu"
             PATH="C:\\msys64\\mingw64\\bin;C:\\msys64\\usr\\bin;$PATH"
           # Test: verify Rust extension loads
           CIBW_TEST_COMMAND: >
