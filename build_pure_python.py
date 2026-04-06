@@ -16,34 +16,38 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 
+
 def main():
     dist = ROOT / "dist"
     if dist.exists():
         shutil.rmtree(dist)
 
-    # Write a temporary setup.py for pure-Python build
-    setup_py = ROOT / "setup.py"
-    setup_py.write_text("""\
-from setuptools import setup, find_packages
+    # Temporarily swap pyproject.toml for a setuptools-based one
+    pyproject = ROOT / "pyproject.toml"
+    pyproject_backup = ROOT / "pyproject.toml.bak"
+    pyproject.rename(pyproject_backup)
 
-setup(
-    name="ilt-inversion",
-    version="0.1.0",
-    description="Fast numerical inverse Laplace transforms: GWR + Fixed Talbot",
-    long_description=open("README.md").read(),
-    long_description_content_type="text/markdown",
-    author="Mark Burgoyne",
-    author_email="mark.burgoyne@gmail.com",
-    license="GPL-3.0-or-later",
-    python_requires=">=3.10",
-    install_requires=["mpmath>=1.3", "numpy>=1.21"],
-    extras_require={
-        "fast": ["gmpy2>=2.1"],
-        "flint": ["python-flint>=0.4"],
-    },
-    packages=find_packages(where="python"),
-    package_dir={"": "python"},
-)
+    pyproject.write_text("""\
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ilt-inversion"
+version = "0.1.2"
+description = "Fast numerical inverse Laplace transforms: GWR + Fixed Talbot"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [{name = "Mark Burgoyne", email = "mark.burgoyne@gmail.com"}]
+dependencies = ["mpmath>=1.3", "numpy>=1.21"]
+
+[project.optional-dependencies]
+fast = ["gmpy2>=2.1"]
+flint = ["python-flint>=0.4"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
 """)
 
     try:
@@ -53,9 +57,10 @@ setup(
             str(ROOT),
         ])
     finally:
-        setup_py.unlink(missing_ok=True)
+        pyproject.unlink(missing_ok=True)
+        pyproject_backup.rename(pyproject)
 
-    print(f"\\nPure-Python wheel built in {dist}/")
+    print(f"\nPure-Python wheel built in {dist}/")
 
 
 if __name__ == "__main__":

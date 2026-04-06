@@ -1,6 +1,6 @@
 [package]
 name = "ilt-native"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Rust/MPFR acceleration for ilt-inversion"
