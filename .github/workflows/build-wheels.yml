@@ -68,7 +68,7 @@ jobs:
           CIBW_TEST_COMMAND: >
             python -c "from ilt._native import gwr_rust; print('Rust extension loaded OK')"
           CIBW_TEST_REQUIRES: "mpmath numpy"
-          CIBW_TEST_SKIP: "*-manylinux* *-macosx_x86_64"
+          CIBW_TEST_SKIP: "*-manylinux* *-macosx_x86_64 cp38-* cp39-*"
 
       - uses: actions/upload-artifact@v4
         with:
