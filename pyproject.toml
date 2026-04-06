@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "ilt-inversion"
-version = "0.1.4"
+version = "0.1.5"
 description = "Fast numerical inverse Laplace transforms: GWR (arbitrary precision) + Fixed Talbot, with optional Rust/MPFR acceleration"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 authors = [
     {name = "Mark Burgoyne", email = "mark.burgoyne@gmail.com"},
 ]
