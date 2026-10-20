@@ -31,6 +31,11 @@ fn series_negligible(term: &Float, sum: &Float, prec: u32) -> bool {
     }
 }
 
+/// Loop bound for the asymptotic sum: past the optimal truncation index (~2x).
+fn asymptotic_max_terms(x: &Float) -> u64 {
+    (4.0 * x.to_f64()) as u64 + 100
+}
+
 /// Guard bits for evaluating a series at `x`.
 fn series_guard_bits(x: &Float) -> u32 {
     (2.0 * x.to_f64() * std::f64::consts::LOG2_E).ceil() as u32 + SERIES_EXTRA_GUARD_BITS
@@ -48,7 +53,9 @@ fn besseli_asymp(x: &Float, nu: u32, prec: u32) -> Float {
     let mut a_k = Float::with_val(prec, 1);
     let mut prev_term_abs = Float::with_val(prec, f64::MAX);
 
-    for k in 1u64..200 {
+    // Optimal truncation sits near k = 2x, so the cap scales with x; a fixed
+    // 200 terms fell short once the precision-scaled switch passed x = 100.
+    for k in 1u64..asymptotic_max_terms(x) {
         let sq = (2 * k - 1) * (2 * k - 1);
         // The I expansion carries (-1)^k (A&S 9.7.1), folded in here; K (9.7.2) does not
         let numer = sq as f64 - mu;
@@ -57,7 +64,7 @@ fn besseli_asymp(x: &Float, nu: u32, prec: u32) -> Float {
         a_k *= &one_over_x;
 
         let term_abs = Float::with_val(prec, a_k.clone().abs());
-        if term_abs > prev_term_abs { break; }
+        if term_abs > prev_term_abs || series_negligible(&a_k, &sum, prec) { break; }
         prev_term_abs.assign_round(&term_abs, Round::Nearest);
         sum += &a_k;
     }
@@ -74,7 +81,9 @@ fn besselk_asymp(x: &Float, nu: u32, prec: u32) -> Float {
     let mut a_k = Float::with_val(prec, 1);
     let mut prev_term_abs = Float::with_val(prec, f64::MAX);
 
-    for k in 1u64..200 {
+    // Optimal truncation sits near k = 2x, so the cap scales with x; a fixed
+    // 200 terms fell short once the precision-scaled switch passed x = 100.
+    for k in 1u64..asymptotic_max_terms(x) {
         let sq = (2 * k - 1) * (2 * k - 1);
         let numer = mu - sq as f64;
         a_k *= Float::with_val(prec, numer);
@@ -82,7 +91,7 @@ fn besselk_asymp(x: &Float, nu: u32, prec: u32) -> Float {
         a_k *= &one_over_x;
 
         let term_abs = Float::with_val(prec, a_k.clone().abs());
-        if term_abs > prev_term_abs { break; }
+        if term_abs > prev_term_abs || series_negligible(&a_k, &sum, prec) { break; }
         prev_term_abs.assign_round(&term_abs, Round::Nearest);
         sum += &a_k;
     }
@@ -229,7 +238,7 @@ mod tests {
     /// the switch point, for both kinds and orders, at 25 and 67 digits.
     #[test]
     fn series_asymptotic_overlap() {
-        for prec in [dec_to_bits(25), dec_to_bits(67)] {
+        for prec in [dec_to_bits(25), dec_to_bits(67), dec_to_bits(134), dec_to_bits(300), dec_to_bits(700)] {
             let x_switch = (prec as f64 + ASYMP_MARGIN_BITS) / (2.0 * std::f64::consts::LOG2_E);
             let x = Float::with_val(prec, x_switch + 0.5);
             let hp = prec + series_guard_bits(&x);
@@ -246,6 +255,37 @@ mod tests {
                 let rel = Float::with_val(prec, Float::with_val(prec, series - asymp) / asymp).abs();
                 let bits = -rel.to_f64().log2();
                 assert!(bits > prec as f64 - 12.0, "case {} prec {}: only {:.0} bits agree", i, prec, bits);
+            }
+        }
+    }
+
+    /// Scaled I_0, I_1, K_0, K_1 against mpmath at 100 digits, both sides of
+    /// the switch (mpmath 1.3, mp.dps = 110).
+    #[test]
+    fn matches_mpmath_at_100_digits() {
+        let prec = dec_to_bits(100);
+        let reference: [(&str, [&str; 4]); 7] = [
+            ("0.001", ["0.999000749583515559395046764639456554789316767358788582699072538198566965189609396026082670294922984226577", "0.000499500312354221336983820506497873799262010996972098326455710985892870321187955688287572629959318711877092", "7.03071600237825151848061412739232252500790428381336683573253255296656125348677551295311352625906278416725", "1000.99673455906845243231366241041866787259215450285347225336727836719744625470833853803731885954184949430"]),
+            ("0.7", ["0.559305526507068317705986933790815280198531690174559030097844404935123809756358788651982193096431324131093", "0.184669982762747324567156081047686881864007813733768147427686993094025659926677915755811059508623404753047", "1.33012365624205562011222477052427596899064423146508929855201122499549742350878258867622174728343706548649", "2.11501131284805236117467532823326595298245067293900228104109334323400982964559372683239583397523291131970"]),
+            ("5", ["0.183540812609328353073650751837396677071552992944265677521533571441920626479281602791151390587113026109164", "0.163972266944542356926122903857531712071570190870036637335381144534989296137234617739505462306638391790581", "0.547807564313518986868201568742870282223396090853118338855275999063337138575248689443904651560470064795655", "0.600273858788312582936045656627059826657768518031746874339422682331827478272917275548189451562351396292891"]),
+            ("23.5", ["0.0827442263816562798326606886596376695293161784587809493118689223564767029175891164978921797818622047876046", "0.0809641267899889406869993423786370356555223627963405802267238782263020369249676060992062789711933631337320", "0.257195304388912854075002389137657900517152808756151652500148286648507436462736804368632825720525653953509", "0.262611655280944622628066195808451264007193856613766721226164960614934864897947691084148879845058165988065"]),
+            ("60", ["0.0516115491736098409485656502259201219221508814546575798901386054042887740472307177830470426619510462413296", "0.0511796301890287181184593726440717802760518979266730770871607906913936911969875948894481328287740448983037", "0.161468178236293925648388738233593668117934932785352730691549709024851429851092820525228755336937787794627", "0.162808230944044271031125024384568087390406224942514678888854885038237947042159852004306286133587096486519"]),
+            ("150", ["0.0326007478839180494850559044868671709225828886732947154619276794412387751432533591411095520922873536005504", "0.0324918963888489424816053537535592922142566371994303674207295638209844866113293981679660327993231806741824", "0.102247711160191052771125668554237816980962388606895066195987797686384586162885850536896951046853796638665", "0.102587972569261209568112767246550147785858847291697931855463198546373962822711937828785867799606616154933"]),
+            ("400", ["0.0199533562819399898712967947299769564475028132790480696676537508311637191292937573770298667203716740156511", "0.0199283989589035418522544778426415582911795928512358108996177823935042873514918979013483560060518783539008", "0.0626461512995781138289217039252431519196378162290600113133361443379604466297522051467178182988384697032177", "0.0627244101682771651757802859054632422181692312611018656970814590089716031744019903537757001323105397906361"]),
+        ];
+        for (xs, vals) in reference.iter() {
+            let x = Float::with_val(prec, Float::parse(xs).unwrap());
+            let got = [
+                mpfr_besseli_scaled(&x, 0, prec),
+                mpfr_besseli_scaled(&x, 1, prec),
+                mpfr_besselk_scaled(&x, 0, prec),
+                mpfr_besselk_scaled(&x, 1, prec),
+            ];
+            for (i, (g, v)) in got.iter().zip(vals.iter()).enumerate() {
+                let r = Float::with_val(prec, Float::parse(v).unwrap());
+                let rel = Float::with_val(prec, Float::with_val(prec, g - &r) / &r).abs();
+                let bits = if rel.is_zero() { f64::INFINITY } else { -rel.to_f64().log2() };
+                assert!(bits > prec as f64 - 12.0, "x {} fn {}: only {:.0} of {} bits", xs, i, bits, prec);
             }
         }
     }
