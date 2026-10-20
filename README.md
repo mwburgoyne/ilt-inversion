@@ -14,23 +14,23 @@ If you've ever needed to numerically invert a Laplace transform in Python, you'v
 
 **Stehfest** is the one everyone implements first, because it's simple and works at f64 precision. Handles smooth, monotonic transforms fine, but give it anything oscillatory or steep and it falls apart. The fixed-precision coefficients hit catastrophic cancellation at higher orders, capping you at ~6-8 significant figures no matter how many terms you throw at it.
 
-**David Fulford's [`gwr_inversion`](https://github.com/petbox-dev/gwr)** is the package that got this right in Python. It implements GWR with arbitrary precision via mpmath and optional gmpy2 acceleration (~10x speedup) - a clean, correct implementation that made GWR accessible to the Python community. For most general-purpose ILT work, `gwr_inversion` is all you need and this library owes a debt to it.
+**David Fulford's [`gwr_inversion`](https://github.com/petbox-dev/gwr)** is the package that got this right in Python. It implements GWR with arbitrary precision via mpmath, with optional gmpy2 acceleration, and this library owes a debt to it. Version 2.0.0 (October 2026) adds python-flint (ARB) Bessel functions, a `workers` process pool, and a library of well-test solutions in the Laplace domain: radial, linear and fractured-well geometries with dual porosity, skin and wellbore storage, returning pressure, rate, Bourdet derivative and cumulative. If you want ready-made well-test models, use `gwr_inversion`.
 
 ## Where this library adds value
 
 For straightforward `gwr(my_function, times)` calls, this library's Python path is essentially the same algorithm as Fulford's, with the same gmpy2 acceleration option. If that's your use case, either package will serve you well.
 
-The differences show up in two specific areas:
+The differences are a compiled Rust path, in two places:
 
 **Bulk inversion with simple callables.** When `M` is small enough that f64 precision suffices (M <= 7, covering ~15 significant figures), the Rust backend bypasses Python entirely and runs the full GWR algorithm in compiled code. That's about 7x faster per call than the gmpy2 Python path for a cheap callable (less when the callable itself is expensive, since its Python cost is the same on every path), which adds up if you're inverting across large parameter sweeps or Monte Carlo runs. For higher M, the Rust path can't help with a general Python callable (the f64 boundary at the Python-Rust interface becomes the bottleneck), and the Python path with gmpy2 is the right choice - same as Fulford's package.
 
-**Bessel-function Laplace domains at full working precision.** For Laplace-domain functions built from modified Bessel functions (pressure transient analysis, radial diffusion, heat conduction), the library includes arbitrary-precision implementations of I_0, I_1, K_0, K_1 with numerical safeguards that matter when you're evaluating these functions across a wide range of arguments:
+**Bessel functions in compiled arbitrary precision.** For Laplace-domain functions built from modified Bessel functions (pressure transient analysis, radial diffusion, heat conduction), the Rust extension includes arbitrary-precision I_0, I_1, K_0, K_1 (exposed as `besseli_rust` / `besselk_rust`, which return floats; `besseli` / `besselk` use python-flint or mpmath and return mpmath values) with numerical safeguards that matter when you're evaluating these functions across a wide range of arguments:
 
 - Dynamic guard bits on the K_0 power series to compensate for catastrophic cancellation between the `-(ln(x/2) + gamma) * I_0(x)` term and the harmonic series. At `x = 20`, that's ~18 digits of cancellation that silently corrupts the result if you compute at working precision.
 - Exponentially-scaled forms (`I_ne(x) = I_n(x) * exp(-x)`, `K_ne(x) = K_n(x) * exp(x)`) that stay O(1) for all `x`, avoiding the overflow/underflow that hits f64 past `x > 700`.
 - Optimal truncation of asymptotic expansions for large arguments, switching from the power series where the asymptotic error e^(-2x) falls below the working precision (so the switch point moves out as precision rises).
 
-When the Laplace-domain function is implemented entirely in Rust using these Bessel functions (as it is for the Van Everdingen-Hurst radial flow solution in [pyResToolbox](https://github.com/mwburgoyne/pyResToolbox)), the full pipeline - Bessel evaluation, GWR coefficients, Wynn-rho acceleration - runs in compiled arbitrary precision without crossing the Python boundary. For pyResToolbox's influence tables that is about 25x faster than the pure-Python path at M=7.
+These Bessel functions only pay off fully when the transform itself is also in Rust, so that Bessel evaluation, the Gaver sums and Wynn-rho acceleration all run in compiled arbitrary precision without crossing into Python. [pyResToolbox](https://github.com/mwburgoyne/pyResToolbox) does this for the Van Everdingen-Hurst bounded radial solution (`simtools.influence_tables`), spread across all CPU threads. On a 126-point table (6 ReD x 21 tD, 4-core / 8-thread machine, best of 3) it gives the same accuracy as `gwr_inversion` 2.0.0's built-in bounded radial transform at every M tested (7 to 32) and runs 2.1-2.3x faster single-threaded (0.19 s against 0.40 s at M=7) and 2.5-2.8x faster with both on all cores (0.059 s against 0.15 s with `workers=8`). That pipeline lives in pyResToolbox, not here: from this package, a transform you write in Python runs at Python speed on every path.
 
 ## How GWR works
 
@@ -46,8 +46,8 @@ The library picks the fastest backend that will give correct results:
 
 | Tier | Backend | Speedup | When used |
 |------|---------|---------|-----------|
-| 1 | Rust | ~7-25x | M <= 7 (general callables) or internal Bessel evaluation (any M) |
-| 2 | gmpy2 | ~10x | M > 7 with general Python callables |
+| 1 | Rust | ~7x over gmpy2 | M <= 7 with a cheap callable and `workers=1` |
+| 2 | gmpy2 | ~10x | M > 7, or `workers > 1` |
 | 3 | mpmath | baseline | Always available |
 
 The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already provides - we inherited that design. The Rust tier is what's new. Its arbitrary-precision arithmetic is the pure-Rust `astro-float` crate, so building it needs only a Rust toolchain.

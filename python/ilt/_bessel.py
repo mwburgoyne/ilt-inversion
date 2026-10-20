@@ -4,8 +4,8 @@ Accelerated Bessel functions using python-flint (ARB) when available.
 ARB provides ~15x speedup over mpmath for modified Bessel functions K_n and I_n.
 Falls back transparently to mpmath when python-flint is not installed.
 
-When the Rust native extension is available, besseli_rust / besselk_rust
-provide even faster f64 evaluation at arbitrary internal precision.
+The Rust extension's besseli_rust / besselk_rust (separate functions, not
+used here) evaluate at arbitrary internal precision and return floats.
 """
 
 from mpmath import mp

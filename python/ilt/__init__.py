@@ -25,7 +25,7 @@ Quick start::
     results = gwr(F, times, workers=4)
 
 Performance backends (auto-detected, fastest first):
-    - Rust:         ~7-25x faster (prebuilt wheels, or any Rust toolchain)
+    - Rust:         ~7x faster than gmpy2 at M <= 7 (prebuilt wheels, or any Rust toolchain)
     - gmpy2:        ~10x faster GWR internal arithmetic
     - python-flint: ~15x faster Bessel functions (via ARB)
 
