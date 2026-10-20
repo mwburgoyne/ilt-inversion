@@ -22,15 +22,15 @@ For straightforward `gwr(my_function, times)` calls, this library's Python path 
 
 The differences show up in two specific areas:
 
-**Bulk inversion with simple callables.** When `M` is small enough that f64 precision suffices (M <= 7, covering ~15 significant figures), the Rust/MPFR backend bypasses Python entirely and runs the full GWR algorithm in compiled code. That's a ~15x speedup per call, which adds up if you're inverting across large parameter sweeps or Monte Carlo runs. For higher M, the Rust path can't help with a general Python callable (the f64 boundary at the Python-Rust interface becomes the bottleneck), and the Python path with gmpy2 is the right choice - same as Fulford's package.
+**Bulk inversion with simple callables.** When `M` is small enough that f64 precision suffices (M <= 7, covering ~15 significant figures), the Rust backend bypasses Python entirely and runs the full GWR algorithm in compiled code. That's about 7x faster per call than the gmpy2 Python path for a cheap callable (less when the callable itself is expensive, since its Python cost is the same on every path), which adds up if you're inverting across large parameter sweeps or Monte Carlo runs. For higher M, the Rust path can't help with a general Python callable (the f64 boundary at the Python-Rust interface becomes the bottleneck), and the Python path with gmpy2 is the right choice - same as Fulford's package.
 
-**Bessel-function Laplace domains at full MPFR precision.** For Laplace-domain functions built from modified Bessel functions (pressure transient analysis, radial diffusion, heat conduction), the library includes MPFR-precision implementations of I_0, I_1, K_0, K_1 with numerical safeguards that matter when you're evaluating these functions across a wide range of arguments:
+**Bessel-function Laplace domains at full working precision.** For Laplace-domain functions built from modified Bessel functions (pressure transient analysis, radial diffusion, heat conduction), the library includes arbitrary-precision implementations of I_0, I_1, K_0, K_1 with numerical safeguards that matter when you're evaluating these functions across a wide range of arguments:
 
 - Dynamic guard bits on the K_0 power series to compensate for catastrophic cancellation between the `-(ln(x/2) + gamma) * I_0(x)` term and the harmonic series. At `x = 20`, that's ~18 digits of cancellation that silently corrupts the result if you compute at working precision.
 - Exponentially-scaled forms (`I_ne(x) = I_n(x) * exp(-x)`, `K_ne(x) = K_n(x) * exp(x)`) that stay O(1) for all `x`, avoiding the overflow/underflow that hits f64 past `x > 700`.
-- Optimal truncation of asymptotic expansions for large arguments, switching from the power series at `x = 25`.
+- Optimal truncation of asymptotic expansions for large arguments, switching from the power series where the asymptotic error e^(-2x) falls below the working precision (so the switch point moves out as precision rises).
 
-When the Laplace-domain function is implemented entirely in Rust using these Bessel functions (as it is for the Van Everdingen-Hurst radial flow solution in [pyResToolbox](https://github.com/mwburgoyne/pyResToolbox)), the full pipeline - Bessel evaluation, GWR coefficients, Wynn-rho acceleration - runs in compiled MPFR precision without crossing the Python boundary. That's where the ~70x number comes from.
+When the Laplace-domain function is implemented entirely in Rust using these Bessel functions (as it is for the Van Everdingen-Hurst radial flow solution in [pyResToolbox](https://github.com/mwburgoyne/pyResToolbox)), the full pipeline - Bessel evaluation, GWR coefficients, Wynn-rho acceleration - runs in compiled arbitrary precision without crossing the Python boundary. For pyResToolbox's influence tables that is about 25x faster than the pure-Python path at M=7.
 
 ## How GWR works
 
@@ -46,11 +46,11 @@ The library picks the fastest backend that will give correct results:
 
 | Tier | Backend | Speedup | When used |
 |------|---------|---------|-----------|
-| 1 | Rust/MPFR | ~15-70x | M <= 7 (general callables) or internal Bessel evaluation (any M) |
+| 1 | Rust | ~7-25x | M <= 7 (general callables) or internal Bessel evaluation (any M) |
 | 2 | gmpy2 | ~10x | M > 7 with general Python callables |
 | 3 | mpmath | baseline | Always available |
 
-The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already provides - we inherited that design. The Rust/MPFR tier is what's new.
+The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already provides - we inherited that design. The Rust tier is what's new. Its arbitrary-precision arithmetic is the pure-Rust `astro-float` crate, so building it needs only a Rust toolchain.
 
 ## Installation
 
@@ -58,7 +58,7 @@ The gmpy2 tier is the same acceleration that Fulford's `gwr_inversion` already p
 pip install ilt-inversion
 ```
 
-Binary wheels include the Rust/MPFR extension for Linux, macOS, and Windows. If no binary wheel is available for your platform, the pure-Python fallback installs automatically and the Rust acceleration is simply absent.
+Binary wheels include the Rust extension for Linux, macOS, and Windows. If no binary wheel is available for your platform, the pure-Python fallback installs automatically and the Rust acceleration is simply absent.
 
 Optional accelerators for the Python path:
 

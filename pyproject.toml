@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "ilt-inversion"
 version = "0.1.6"
-description = "Fast numerical inverse Laplace transforms: GWR (arbitrary precision) + Fixed Talbot, with optional Rust/MPFR acceleration"
+description = "Fast numerical inverse Laplace transforms: GWR (arbitrary precision) + Fixed Talbot, with optional Rust acceleration"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.8"

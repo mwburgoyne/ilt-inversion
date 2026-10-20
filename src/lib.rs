@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 
 mod gwr;
 mod bessel;
+mod mpfloat;
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {

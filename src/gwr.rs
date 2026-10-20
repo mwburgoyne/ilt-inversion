@@ -1,16 +1,14 @@
-//! Gaver-Wynn-Rho (GWR) Inverse Laplace Transform — Rust + MPFR acceleration.
+//! Gaver-Wynn-Rho (GWR) Inverse Laplace Transform in arbitrary precision.
 //!
-//! Implements the GWR algorithm with arbitrary-precision arithmetic via the
-//! `rug` crate (GMP/MPFR bindings).  This is the gold-standard ILT method
-//! for reservoir engineering — accurate even for oscillatory transforms.
+//! Implements the GWR algorithm with arbitrary-precision arithmetic via
+//! `mpfloat::Mp` (pure-Rust `astro-float`). This is the gold-standard ILT
+//! method for reservoir engineering, accurate even for oscillatory transforms.
 //!
 //! References:
 //!   Valko & Abate (2004), Computers and Mathematics with Application 48(3).
 
 use pyo3::prelude::*;
-use rug::Float;
-use rug::float::Round;
-use rug::ops::AssignRound;
+use crate::mpfloat::Mp;
 
 // =========================================================================
 //  Precision helpers
@@ -26,8 +24,8 @@ pub fn dec_to_bits(dec_digits: u32) -> u32 {
 // =========================================================================
 
 struct GwrCoefficients {
-    gaver_coeffs: Vec<Float>,
-    binom_table: Vec<Vec<Float>>,
+    gaver_coeffs: Vec<Mp>,
+    binom_table: Vec<Vec<Mp>>,
     prec_bits: u32,
 }
 
@@ -37,28 +35,25 @@ impl GwrCoefficients {
 
         let max_k = 2 * m;
         let mut fac = Vec::with_capacity(max_k + 1);
-        fac.push(Float::with_val(prec, 1));
+        fac.push(Mp::from_u64(1, prec));
         for k in 1..=max_k {
-            let prev = &fac[k - 1];
-            fac.push(Float::with_val(prec, prev * k as u32));
+            let next = &fac[k - 1] * k as u64;
+            fac.push(next);
         }
 
         let mut gaver_coeffs = Vec::with_capacity(m);
         for n in 1..=m {
-            let num = &fac[2 * n];
-            let n_fac_m1 = &fac[n - 1];
-            let den = Float::with_val(prec, n_fac_m1 * n_fac_m1) * n as u32;
-            gaver_coeffs.push(Float::with_val(prec, num / &den));
+            let den = &(&fac[n - 1] * &fac[n - 1]) * n as u64;
+            gaver_coeffs.push(&fac[2 * n] / &den);
         }
 
         let mut binom_table = Vec::with_capacity(m);
         for n in 1..=m {
             let mut row = Vec::with_capacity(n + 1);
-            row.push(Float::with_val(prec, 1));
+            row.push(Mp::from_u64(1, prec));
             for i in 1..=n {
-                let prev = &row[i - 1];
-                let val = Float::with_val(prec, prev * (n - i + 1) as u32) / i as u32;
-                row.push(Float::with_val(prec, val));
+                let val = &(&row[i - 1] * (n - i + 1) as u64) / i as u64;
+                row.push(val);
             }
             binom_table.push(row);
         }
@@ -76,47 +71,43 @@ impl GwrCoefficients {
 // =========================================================================
 
 fn gwr_single(
-    fni: &[Float],
+    fni: &[Mp],
     m: usize,
-    tau: &Float,
+    tau: &Mp,
     coeffs: &GwrCoefficients,
 ) -> f64 {
     let prec = coeffs.prec_bits;
 
     let m1 = m;
-    let mut g0: Vec<Float> = Vec::with_capacity(m);
+    let mut g0: Vec<Mp> = Vec::with_capacity(m);
 
     for n in 1..=m {
         let binom_row = &coeffs.binom_table[n - 1];
-        let mut s = Float::new(prec);
-        for i in 0..=n {
+        let mut s = Mp::zero(prec);
+        for (i, binom) in binom_row.iter().enumerate().take(n + 1) {
             let idx = n + i - 1;
-            let term = Float::with_val(prec, &binom_row[i] * &fni[idx]);
-            if i & 1 == 1 {
-                s -= term;
-            } else {
-                s += term;
-            }
+            let term = binom * &fni[idx];
+            s = if i & 1 == 1 { &s - &term } else { &s + &term };
         }
-        g0.push(Float::with_val(prec, tau * &coeffs.gaver_coeffs[n - 1]) * s);
+        g0.push(&(tau * &coeffs.gaver_coeffs[n - 1]) * &s);
     }
 
-    let mut best = Float::with_val(prec, &g0[m1 - 1]);
-    let mut gm: Vec<Float> = vec![Float::new(prec); m1];
-    let mut gp: Vec<Float> = vec![Float::new(prec); m1];
+    let mut best = g0[m1 - 1].clone();
+    let mut gm: Vec<Mp> = vec![Mp::zero(prec); m1];
+    let mut gp: Vec<Mp> = vec![Mp::zero(prec); m1];
 
     let mut broken = false;
     for k in 0..(m1 - 1) {
         for n in (0..=(m1 - 2 - k)).rev() {
-            let diff = Float::with_val(prec, &g0[n + 1] - &g0[n]);
+            let diff = &g0[n + 1] - &g0[n];
             if diff.is_zero() {
                 broken = true;
                 break;
             }
-            let ratio = Float::with_val(prec, (k as f64 + 1.0) / &diff);
-            gp[n] = Float::with_val(prec, &gm[n + 1] + &ratio);
+            let ratio = &Mp::from_f64(k as f64 + 1.0, prec) / &diff;
+            gp[n] = &gm[n + 1] + &ratio;
             if k % 2 == 1 && n == m1 - 2 - k {
-                best.assign_round(&gp[n], Round::Nearest);
+                best = gp[n].clone();
             }
         }
 
@@ -124,10 +115,9 @@ fn gwr_single(
             break;
         }
 
-        for n in 0..(m1 - k) {
-            gm[n].assign_round(&g0[n], Round::Nearest);
-            g0[n].assign_round(&gp[n], Round::Nearest);
-        }
+        let len = m1 - k;
+        gm[..len].clone_from_slice(&g0[..len]);
+        g0[..len].clone_from_slice(&gp[..len]);
     }
 
     best.to_f64()
@@ -159,17 +149,17 @@ pub fn gwr_rust(
     let prec_dec = prec.unwrap_or_else(|| (2.1 * m as f64).round() as u32);
     let prec_bits = dec_to_bits(prec_dec);
     let coeffs = GwrCoefficients::new(m, prec_dec);
+    let ln2 = Mp::from_u64(2, prec_bits).ln();
 
     let mut results = Vec::with_capacity(times.len());
     for &t in &times {
-        let mut tau = Float::with_val(prec_bits, 2u32).ln();
-        tau /= t;
+        let tau = &ln2 / t;
 
         let mut fni = Vec::with_capacity(2 * m);
         for k in 1..=(2 * m) {
-            let s_val = Float::with_val(prec_bits, &tau * k as u32).to_f64();
+            let s_val = (&tau * k as u64).to_f64();
             let fs: f64 = fn_obj.call1((s_val,))?.extract()?;
-            fni.push(Float::with_val(prec_bits, fs));
+            fni.push(Mp::from_f64(fs, prec_bits));
         }
 
         results.push(gwr_single(&fni, m, &tau, &coeffs));
