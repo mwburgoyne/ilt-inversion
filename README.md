@@ -96,7 +96,7 @@ results = gwr(F, times, workers=4)
 
 **`gwr(fn, time, M=32, precin=None, backend='auto', workers=1, as_float=True)`**
 
-Inverse Laplace transform via Gaver-Wynn-Rho. `fn` is your Laplace-domain function `F(s)` or `F(s, prec)`. `time` accepts a scalar, list, or numpy array (must be > 0). `M` controls accuracy - 6-12 for smooth transforms, 32 for general use, 768+ for hard oscillatory cases. `precin` overrides the automatic precision (`round(2.1 * M)` decimal digits). `backend` can be `'auto'`, `'rust'`, `'gmpy2'`, or `'mpmath'`. `workers` sets the number of parallel processes for array inputs (default 1 = sequential) - each time point is inverted independently, so this parallelises well, but `fn` must be picklable (a module-level function, not a lambda or closure). Set `as_float=False` to get mpmath.mpf values at full precision.
+Inverse Laplace transform via Gaver-Wynn-Rho. `fn` is your Laplace-domain function `F(s)` or `F(s, prec)`. `time` accepts a scalar, list, or numpy array (must be > 0). `M` controls accuracy - 6-12 for smooth transforms, 32 for general use, 768+ for hard oscillatory cases. `precin` overrides the automatic precision (`round(2.1 * M)` decimal digits). `backend` can be `'auto'`, `'rust'`, `'gmpy2'`, or `'mpmath'`. `workers` sets the number of parallel processes for array inputs (default 1 = sequential); see [Parallel evaluation](#parallel-evaluation-workers). Set `as_float=False` to get mpmath.mpf values at full precision.
 
 **`talbot(fn, time, degree=32, as_float=True)`**
 
@@ -105,6 +105,16 @@ Inverse Laplace transform via Fixed Talbot. Good for well-behaved, non-oscillato
 **`besselk(n, x)` / `besseli(n, x)`**
 
 Modified Bessel functions K_n(x) and I_n(x) with automatic python-flint/ARB acceleration when available.
+
+## Parallel evaluation (`workers`)
+
+`gwr(fn, times, workers=N)` inverts the time points in parallel on the Python path (gmpy2 or mpmath backend). Each time point is an independent inversion, so they are handed to a `ProcessPoolExecutor` one point per task. How it behaves:
+
+- The pool size is `min(workers, len(times), os.cpu_count())`, so asking for more workers than points or CPUs costs nothing extra.
+- A new pool starts on every call and each task rebuilds the GWR coefficients, so the overhead is a process start-up per worker plus one coefficient set per time point. It pays off when `fn` is expensive (Bessel-function transforms, high `M`) and there are many time points; for a cheap `fn` or a handful of points, `workers=1` is faster.
+- `fn` must be picklable: a module-level function, or an instance of a module-level class with `__call__`. Lambdas and closures fail.
+- `workers > 1` always takes the Python path. The Rust fast path (used when `backend` is `'auto'` or `'rust'` and the precision fits in f64, i.e. `M <= 7`) runs single-threaded, because it calls your Python `fn` and holds the GIL; at `M <= 7` with a cheap `fn` it is usually faster than any worker count.
+- Results match the sequential Python path (`workers=1, backend='gmpy2'` or `'mpmath'`); only the scheduling changes. At `M <= 7` the default `workers=1` takes the Rust path, which works from f64 values of `fn` and can differ in the last digits.
 
 ## Acknowledgements
 

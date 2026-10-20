@@ -88,8 +88,13 @@ def gwr(
         'auto' (Rust if available, else gmpy2 if available, else mpmath),
         'rust', 'gmpy2', or 'mpmath'.
     workers : int
-        Parallel workers for array inputs.  >1 requires fn to be picklable
-        (module-level function, not a lambda).  Default 1 (sequential).
+        Parallel worker processes for array inputs (default 1, sequential).
+        The pool is min(workers, len(time), cpu_count), started per call,
+        one time point per task.  >1 requires fn to be picklable
+        (module-level function or class instance, not a lambda or closure)
+        and always uses the Python path: the Rust fast path (M <= 7) is
+        single-threaded and is skipped.  Worth it for an expensive fn over
+        many time points; see the README section "Parallel evaluation".
     as_float : bool
         If True (default), convert results to Python float.
         If False, return mpmath.mpf values with full precision.
